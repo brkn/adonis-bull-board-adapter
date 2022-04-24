@@ -1,1 +1,1 @@
-export { FastifyAdapter } from './FastifyAdapter';
+export { FastifyAdapter } from "./FastifyAdapter";

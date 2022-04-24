@@ -12,7 +12,12 @@
     "noUnusedParameters": true,
     "noUnusedLocals": true,
     "resolveJsonModule": true,
-    "declaration": true
+    "declaration": true,
+
+    "noErrorTruncation": true,
+    "noImplicitOverride": true,
+
+    "strictNullChecks": true
   },
   "include": ["./src", "./typings/*.d.ts"]
 }
