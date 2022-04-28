@@ -19,5 +19,9 @@
 
     "strictNullChecks": true
   },
-  "include": ["./src", "./typings/*.d.ts"]
+  "include": ["./src", "./typings/*.d.ts", "./node_modules/@adonisjs/**/*.d.ts"],
+  "types": [
+    "@adonisjs/http-server",
+    "@adonisjs/core",
+  ],
 }

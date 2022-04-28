@@ -1,73 +1,105 @@
+import { RouteContract, RouterContract, RouteHandler } from "@ioc:Adonis/Core/Route";
 import {
-  AppControllerRoute, AppViewRoute, BullBoardQueues, ControllerHandlerReturnType,
+  AppControllerRoute,
+  AppViewRoute,
+  BullBoardQueues,
+  ControllerHandlerReturnType,
+  IServerAdapter,
 } from "@bull-board/api/dist/typings/app";
-// eslint-disable-next-line import/no-extraneous-dependencies
-import { HTTPMethods } from "fastify";
+import BullBoardException from "./BullBoardException";
 
-type Params = {
-  basePath: string,
-  statics: { path: string; route: string },
-  routeDef: AppViewRoute,
-  viewPath: string;
-  errorHandler: (error: Error) => ControllerHandlerReturnType
-  bullBoardQueues: BullBoardQueues;
-  routes: AppControllerRoute[]
-};
+export class AdonisAdapter implements IServerAdapter {
+  private basePath = "";
+  private bullBoardQueues: BullBoardQueues | undefined;
+  private errorHandler:
+  | ((error: Error) => ControllerHandlerReturnType)
+  | undefined;
+  private statics: { path: string; route: string } | undefined;
+  private viewPath: string | undefined;
+  private entryRoute:
+  | { method: string; routes: string[]; filename: string }
+  | undefined;
+  private apiRoutes: RouteContract[] | undefined;
 
-type FastifyRouteDef = {
-  method: HTTPMethods;
-  route: string;
-  handler: AppControllerRoute["handler"];
-};
+  constructor(private readonly AdonisRouter: RouterContract) {}
 
-export class AdonisAdapter {
-  private basePath: string;
-  private bullBoardQueues: BullBoardQueues;
-  private errorHandler: ((error: Error) => ControllerHandlerReturnType);
-  private statics: { path: string; route: string };
-  private viewPath: string;
-  private entryRoute: { method: HTTPMethods; routes: string[]; filename: string };
-  private apiRoutes: Array<FastifyRouteDef>;
+  public setBasePath(path: string): AdonisAdapter {
+    this.basePath = path;
 
-  constructor({
-    basePath,
-    statics,
-    routeDef,
-    viewPath,
-    errorHandler,
-    bullBoardQueues,
-    routes,
-  }: Params) {
-    this.basePath = basePath;
-    this.statics = statics;
+    return this;
+  }
+
+  public setStaticPath(
+    staticsRoute: string,
+    staticsPath: string,
+  ): AdonisAdapter {
+    this.statics = { route: staticsRoute, path: staticsPath };
+
+    return this;
+  }
+
+  public setViewsPath(viewPath: string): AdonisAdapter {
     this.viewPath = viewPath;
-    this.errorHandler = errorHandler;
-    this.bullBoardQueues = bullBoardQueues;
 
+    return this;
+  }
+
+  public setErrorHandler(
+    errorHandler: (error: Error) => ControllerHandlerReturnType,
+  ) {
+    this.errorHandler = errorHandler;
+
+    return this;
+  }
+
+  public setApiRoutes(bullBoardRoutes: AppControllerRoute[]): AdonisAdapter {
+    this.apiRoutes = bullBoardRoutes
+      .map((bullBoardRoute) => {
+        const routes = Array.isArray(bullBoardRoute.route)
+          ? bullBoardRoute.route
+          : [bullBoardRoute.route];
+        const methods = Array.isArray(bullBoardRoute.method)
+          ? bullBoardRoute.method
+          : [bullBoardRoute.method];
+
+        const routeHandler: RouteHandler = async (ctx) => {
+          try {
+            await bullBoardRoute.handler();
+          } catch (error) {
+            if (!this.errorHandler) {
+              return;
+            }
+
+            const {
+              status,
+              body: errorBody,
+            } = this.errorHandler(error as Error);
+
+            ctx.response.status(status || 500).send(errorBody);
+          }
+        };
+
+        return routes.map((route) => this.AdonisRouter.route(route, methods, routeHandler));
+      }).flat(2);
+
+    return this;
+  }
+
+  public setEntryRoute(routeDef: AppViewRoute): AdonisAdapter {
     const { name } = routeDef.handler();
+
     this.entryRoute = {
-      method: routeDef.method.toUpperCase() as HTTPMethods,
-      routes: ([] as string[]).concat(routeDef.route),
+      method: routeDef.method.toUpperCase(),
+      routes: Array.isArray(routeDef.route) ? routeDef.route : [routeDef.route],
       filename: name,
     };
 
-    this.apiRoutes = routes.reduce((result, routeRaw) => {
-      const innerRoutes = Array.isArray(routeRaw.route) ? routeRaw.route : [routeRaw.route];
-      const methods = Array.isArray(routeRaw.method) ? routeRaw.method : [routeRaw.method];
-
-      innerRoutes.forEach((route) => {
-        result.push({
-          method: methods.map((method) => method.toUpperCase()) as unknown as HTTPMethods,
-          route,
-          handler: routeRaw.handler,
-        });
-      });
-
-      return result;
-    }, [] as FastifyRouteDef[]);
+    return this;
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  public registerPlugin() {
+  public setQueues(bullBoardQueues: BullBoardQueues): AdonisAdapter {
+    this.bullBoardQueues = bullBoardQueues;
+
+    return this;
   }
 }

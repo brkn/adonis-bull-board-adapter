@@ -1,1 +1,1 @@
-export { FastifyAdapter } from "./FastifyAdapter";
+export { AdonisAdapter } from "./AdonisAdapter";
